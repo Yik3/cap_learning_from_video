@@ -1,0 +1,33 @@
+# env_configs/push_bottle.yaml
+
+env:
+  _target_: capx.envs.tasks.franka.push_bottle_task.FrankaPushBottleTaskEnv
+  cfg:
+    _target_: capx.envs.tasks.base.CodeExecEnvConfig
+    low_level: push_bottle_sim_env
+    privileged: false
+    apis:
+      - FrankaControlApi
+    prompt: |
+      You are controlling a Franka Panda robot. 
+      There is a green bottle on the table. Please knock down the green bottle. 
+      Write ONLY executable Python code. No code fences.
+# 让框架自动拉起视觉和运动规划服务器 (这样你就不用手动开多余的 terminal 了)
+api_servers:
+  - _target_: capx.serving.launch_sam3_server.main
+    device: cuda
+    port: 8114
+    host: 127.0.0.1
+  - _target_: capx.serving.launch_contact_graspnet_server.main
+    port: 8115
+    host: 127.0.0.1
+  - _target_: capx.serving.launch_pyroki_server.main
+    port: 8116
+    host: 127.0.0.1
+    robot: panda_description
+    target_link: panda_hand
+
+record_video: true
+output_dir: ./outputs/push_bottle
+trials: 10
+num_workers: 1

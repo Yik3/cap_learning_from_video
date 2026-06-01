@@ -1,0 +1,50 @@
+# Usage: uv run capx/envs/launch.py --config-path env_configs/spill_wipe/franka_robosuite_spill_wipe.yaml
+
+env:
+  _target_: capx.envs.tasks.franka.franka_spill_wipe.FrankaSpillWipeCodeEnv
+  cfg:
+    _target_: capx.envs.tasks.base.CodeExecEnvConfig
+    low_level: franka_robosuite_spill_wipe_low_level
+    privileged: false
+    apis:
+      - FrankaControlSpillWipeApi
+    prompt: |
+        You are controlling a Franka Emika robot with API described below.
+
+        [1. SCENE DESCRIPTION: The scene features a table with a rectangular whiteboard lying flat on it. Initially, there are blue marker drawings on the whiteboard. Next to the board is a rectangular eraser block. The reference coordinate system assumes +z points straight up from the table surface.]
+
+        [2. STATE CHANGE & GOAL REASONING: The early frames show a whiteboard with drawings. Over the sequence, a human uses the eraser block to wipe the board. In the final frame, the drawings are completely gone. The goal is to replicate this by picking up the eraser and sweeping it across the whiteboard's surface to clean it.]
+
+        [3. CONSTRAINT & GRASP REASONING: 
+        # - Relational Constraints: The bottom of the eraser must maintain contact with the top surface of the whiteboard during the cleaning phase. 
+        # - Safety & Collision: Wiping trajectory should stay within the boundaries of the whiteboard to prevent slipping off and causing collisions. Do not press too deeply in the z-direction to avoid damaging the board.
+        # - Grasping/Approaching: Approach the eraser from directly above (-z direction). Grasp it securely, then lift.]
+
+        [4. SUGGESTED METHODS:
+        # 1. Query the pose and extents of both the eraser and the whiteboard.
+        # 2. Command the robot to grasp the eraser from above.
+        # 3. Calculate the target wiping height. This should be the whiteboard's z-center + half its z-extent + half the eraser's z-extent (assuming grasping at the eraser's center).
+        # 4. Generate a sequence of waypoints that cover the whiteboard's area (e.g., a zigzag pattern along the X and Y axes of the board). Use the board's X and Y extents to define the boundaries of the pattern.
+        # 5. Move the robot sequentially through these waypoints to wipe the board.
+        # 6. Finally, lift the eraser away from the board.]
+
+        You may write python code comments for reasoning but ONLY write the executable Python code and do not write it in code fences.
+        The functions (APIs) below are already imported to the environment. If you want to use numpy, you need to import it explicitly.
+
+api_servers:
+  - _target_: capx.serving.launch_sam3_server.main
+    device: cuda
+    port: 8114
+    host: 127.0.0.1
+
+  - _target_: capx.serving.launch_pyroki_server.main
+    port: 8116
+    host: 127.0.0.1
+    robot: panda_description
+    target_link: panda_hand
+    
+record_video: true
+output_dir: ./outputs/spill_wipe_pure_agent
+
+trials: 10
+num_workers: 12

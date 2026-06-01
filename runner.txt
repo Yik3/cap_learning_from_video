@@ -1,0 +1,5 @@
+uv run --no-sync --active capx/envs/launch.py --config-path env_configs/cube_stack/franka_robosuite_cube_stack.yaml --model "google/gemini-3.1-pro-preview" --record-video True --total-trials 2
+uv run --no-sync --active capx/envs/launch.py --config-path env_configs/push_bottle.yaml --model "google/gemini-3.1-pro-preview" --record-video True --total-trials 2
+uv run --no-sync --active capx/envs/launch.py --config-path env_configs/push_bottle/push_bottle.yaml --model "google/gemini-3.1-pro-preview" --record-video False --total-trials 10
+Also needs:
+uv run capx/serving/launch_sam3_server.py

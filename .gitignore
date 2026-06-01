@@ -48,3 +48,6 @@ wandb/
 *.ico
 *.webp
 check.md
+
+video_data/
+trajectory_data/

@@ -1,0 +1,3 @@
+You are controlling a Franka Panda robot. 
+There is a whiteboard with drawings on it and an eraser. Grasp the eraser and sweep it across the whiteboard to wipe out the drawings. 
+Write ONLY executable Python code. No code fences.

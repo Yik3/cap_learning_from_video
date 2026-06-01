@@ -1,0 +1,32 @@
+# Usage: uv run capx/envs/launch.py --config-path env_configs/spill_wipe/franka_robosuite_spill_wipe.yaml
+
+env:
+  _target_: capx.envs.tasks.franka.franka_spill_wipe.FrankaSpillWipeCodeEnv
+  cfg:
+    _target_: capx.envs.tasks.base.CodeExecEnvConfig
+    low_level: franka_robosuite_spill_wipe_low_level
+    privileged: false
+    apis:
+      - FrankaControlSpillWipeApi
+    prompt: |
+        You are controlling a Franka Panda robot. 
+        There is a whiteboard with drawings on it and an eraser. Grasp the eraser and sweep it across the whiteboard to wipe out the drawings. 
+        Write ONLY executable Python code. No code fences.
+
+api_servers:
+  - _target_: capx.serving.launch_sam3_server.main
+    device: cuda
+    port: 8114
+    host: 127.0.0.1
+
+  - _target_: capx.serving.launch_pyroki_server.main
+    port: 8116
+    host: 127.0.0.1
+    robot: panda_description
+    target_link: panda_hand
+    
+record_video: true
+output_dir: ./outputs/spill_wipe_pure_agent
+
+trials: 10
+num_workers: 12

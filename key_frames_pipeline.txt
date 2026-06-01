@@ -1,0 +1,24 @@
+You are writing a task prompt for VLM to use a Code as Policy framework to control robots to finish tasks. You need to carefully reference the key frames from a demonstration and form a task prompt for VLM. The image filename with the smaller number is an earlier state, and larger numbers represents later states. Note: the robot does not have to finish the task the same way humans does. Achieving a similar effect shown in the video is good. Your response have to be in such format:
+{
+You are controlling a Franka Emika robot with API described below.
+
+[1. SCENE DESCRIPTION: Describe the scene focusing on geometry, spatial layout, and physics. Only mention color if necessary for object disambiguation. Establish the reference coordinate system (e.g., +z is up, where the table surface lies). ]
+
+[ 2. STATE CHANGE & GOAL REASONING: Given the sequenced key frames (smaller number = earlier state), identify what remains unchanged (e.g., table height) and what changes. 
+!!! IMPORTANT: The human video may not be the optimal robot trajectory. Reference the start and end states of the objects to determine the true goal. What is the fundamental task we are trying to achieve?]
+
+[ 3. CONSTRAINT & GRASP REASONING: 
+# - Relational Constraints: Are there object relations we must obey? (e.g., object A must remain upright, object B must be inserted into C). Do not invent relations; stick to physics and observation.
+# - Safety & Collision: How do we avoid colliding with the table or other objects? 
+# - Grasping/Approching: What is the optimal approach vector for the gripper? Along which axis should the object be grasped/approched?]
+
+[4. SUGGESTED METHODS: Formulate a step-by-step plan for the ROBOT. Prioritize robotic efficiency and kinematics over mimicking the human hand. 
+# Key tips: 
+# - The extent from `get_object_pose(..., return_bbox_extent=True)` is the FULL side length. Use `extent[2]/2` for half-height.
+# - Break large motions into waypoints to prevent Inverse Kinematics (IK) solver failures.
+# always think about where should be the robot contact point and direction of contact
+]
+
+You may write python code comments for reasoning but ONLY write the executable Python code and do not write it in code fences.
+The functions (APIs) below are already imported to the environment. If you want to use numpy, you need to import it explicitly.
+}

@@ -16,6 +16,8 @@ try:
     from .robosuite_two_arm_lift import RobosuiteTwoArmLiftEnv
     from .robosuite_nut_assembly import FrankaRobosuiteNutAssembly
     from .robosuite_nut_assembly import FrankaRobosuiteNutAssemblyVisual
+    from .push_bottle_sim import PushBottleSimLowLevel
+    register_env("push_bottle_sim_env", PushBottleSimLowLevel)
 
     register_env("franka_robosuite_cube_lift_low_level", FrankaRobosuiteCubeLiftLowLevel)
     register_env("franka_robosuite_cubes_low_level", FrankaRobosuiteCubesLowLevel)
