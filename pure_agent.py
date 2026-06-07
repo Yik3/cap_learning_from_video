@@ -47,7 +47,7 @@ def process_video_with_gemini(video_path: str, prompt: str, api_key_file: str) -
 
 if __name__ == "__main__":
     # ================= Configuration =================
-    VIDEO_PATH = "video_data/color_wipe.mp4"              # Replace with your video file path
+    VIDEO_PATH = "video_data/flip.mp4"              # Replace with your video file path
     API_KEY_PATH = ".geminikey"  # Replace with your API key file path
     
     # Your prompt (leave empty or modify as needed)

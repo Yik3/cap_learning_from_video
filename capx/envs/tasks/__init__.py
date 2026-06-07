@@ -16,10 +16,15 @@ from .franka.franka_spill_wipe import FrankaSpillWipeCodeEnv
 from .franka.two_arm_handover import TwoArmHandoverCodeEnv
 from .franka.two_arm_lift import TwoArmLiftCodeEnv
 from .franka.push_bottle_task import FrankaPushBottleTaskEnv
-
+from .franka.flip_bottle_task import FrankaFlipBottleTaskEnv
 register_exec_env("push_bottle_task_env", FrankaPushBottleTaskEnv)
 register_config("push_bottle_task_env", CodeExecEnvConfig(
     low_level="push_bottle_sim_env",
+    apis=["FrankaControlApi"],
+))
+register_exec_env("flip_bottle_task_env", FrankaFlipBottleTaskEnv)
+register_config("flip_bottle_task_env", CodeExecEnvConfig(
+    low_level="flip_bottle_sim_env",
     apis=["FrankaControlApi"],
 ))
 

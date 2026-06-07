@@ -1,0 +1,85 @@
+{
+You are controlling a Franka Emika robot with the API described below. You are provided with the initial observation of the workspace.
+
+[1. SCENE DESCRIPTION: Describe the scene based strictly on the initial observation. Focus entirely on geometry, bounding boxes, spatial layout, and physics. Establish the absolute reference coordinate system (e.g., +z is up, table surface z=0.0). Only mention color if mathematically necessary for object disambiguation.]
+The workspace consists of a flat, horizontal white table surface, which defines the z=0 plane. Upon this surface, there is a single, static, 2D object with a brown texture. The object has an irregular, non-convex shape resembling a flexed arm. It is located in the negative-x, negative-y quadrant of the table. Let the bounding box of this brown object be defined by its minimum and maximum coordinates `(x_min, y_min)` and `(x_max, y_max)`.
+
+[2. STATE CHANGE & GOAL REASONING: Based on the key frames, define the exact start and end states. Skip narrating the human's actions. What is the fundamental, mathematical task we are trying to achieve? Translate the visual goal into an algorithmic goal (e.g., "sweep the min/max X and Y bounds of object A" rather than "clean the board").]
+The demonstration shows an erasing action on a 2D surface. The fundamental task is to systematically move a tool over a defined planar region.
+- **Initial State:** A brown-colored region exists on the table at z=0.
+- **Final State:** The robot's end-effector has completed a full sweep of the rectangular area defined by the bounding box of the brown region.
+- **Algorithmic Goal:** The objective is to perform a raster scan (or boustrophedon) motion with the robot's end-effector across the entire bounding box of the brown object, `[x_min, x_max]` and `[y_min, y_max]`, while maintaining a constant, small offset in the +z direction relative to the table surface.
+
+[3. CONSTRAINTS:
+- Task Constraints:
+  - The end-effector must maintain a constant, downward-facing orientation throughout the sweeping motion. The target orientation quaternion (wxyz) is `[0, 1, 0, 0]`.
+  - The height of the end-effector during the sweeping motion must be held at a constant `z = 0.005` to simulate surface contact without causing a collision.
+  - The sweeping motion must cover the entire rectangular area defined by the brown object's bounding box.
+- Environment Constraints:
+  - The end-effector must not move below z=0 at any point to avoid collision with the table.
+  - Waypoints for the trajectory should be granular and closely spaced (e.g., < 5cm deltas) to ensure smooth motion and prevent inverse kinematics solver failures.
+  - Approach and retreat motions must be performed vertically from/to a safe height (e.g., z=0.2) to avoid collisions.
+
+[4. SUGGESTED METHODS: Formulate a highly prescriptive, step-by-step plan for the ROBOT. Prioritize robotic efficiency over mimicking the human hand. Be direct and imperative.
+Key tips:
+- Be descriptive but point out the key details. 
+- Break large motions into granular waypoints.
+- Always specify the exact expected contact point and direction of the tool/gripper.
+]
+[ # add this as a fixed term
+You may write python code comments for reasoning but ONLY write the executable Python code and do not write it in code fences.
+The functions (APIs) below are already imported to the environment. If you want to use numpy, you need to import it explicitly.
+]
+# First, identify the bounding box of the brown shape from the initial observation.
+# Let's assume perception provides these values, for example:
+# x_min, y_min = -0.3, -0.3
+# x_max, y_max = 0.0, -0.1
+# tool_width = 0.05 # Approximate width of the tool/end-effector for step-over.
+brown_object = get_object_by_name("brown_object")
+x_min, y_min, _ = brown_object.bbox.min
+x_max, y_max, _ = brown_object.bbox.max
+tool_width = 0.05
+
+# Define constants for the motion.
+safe_height = 0.2
+wipe_height = 0.005
+downward_orientation = [0, 1, 0, 0]
+
+# 1. Move to a safe starting position above the corner of the bounding box.
+start_pos_above = [x_min, y_min, safe_height]
+move_to_pose(start_pos_above, downward_orientation)
+
+# 2. Lower the end-effector to the wiping height.
+start_pos_wipe = [x_min, y_min, wipe_height]
+move_to_pose(start_pos_wipe, downward_orientation)
+
+# 3. Execute the raster scan (boustrophedon) wiping pattern.
+import numpy as np
+y_positions = np.arange(y_min, y_max, tool_width)
+for i, y_pos in enumerate(y_positions):
+    if i % 2 == 0:
+        # Move from x_min to x_max
+        move_to_pose([x_min, y_pos, wipe_height], downward_orientation)
+        move_to_pose([x_max, y_pos, wipe_height], downward_orientation)
+    else:
+        # Move from x_max to x_min
+        move_to_pose([x_max, y_pos, wipe_height], downward_orientation)
+        move_to_pose([x_min, y_pos, wipe_height], downward_orientation)
+
+# Ensure the final edge is wiped.
+if len(y_positions) % 2 == 0:
+    move_to_pose([x_min, y_max, wipe_height], downward_orientation)
+    move_to_pose([x_max, y_max, wipe_height], downward_orientation)
+    last_x = x_max
+else:
+    move_to_pose([x_max, y_max, wipe_height], downward_orientation)
+    move_to_pose([x_min, y_max, wipe_height], downward_orientation)
+    last_x = x_min
+
+# 4. Lift the end-effector vertically to a safe height.
+final_pos_above = [last_x, y_max, safe_height]
+move_to_pose(final_pos_above, downward_orientation)
+
+# 5. Return to a neutral home position.
+go_home()
+}

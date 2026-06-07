@@ -3,28 +3,22 @@
 import numpy as np
 import robosuite as suite
 from robosuite.environments.manipulation.lift import Lift
-from robosuite.models.arenas import TableArena            # 显式导入桌面场景
-from robosuite.models.objects import BottleObject         # 原生水瓶模型
-from robosuite.models.tasks import ManipulationTask       # 任务打包器
+from robosuite.models.arenas import TableArena
+from robosuite.models.objects import BottleObject  
+from robosuite.models.tasks import ManipulationTask
 from robosuite.utils.placement_samplers import UniformRandomSampler
 from robosuite.controllers import load_composite_controller_config
 import viser.transforms as vtf
 
 from capx.envs.simulators.robosuite_base import RobosuiteBaseEnv
+from capx.envs.base import register_env 
 
-# =================================================================
-# 1. 定义自定义的 Robosuite 环境 (标准底层重写方案)
-# =================================================================
 class FlipBottleRobosuiteEnv(Lift):
     def _load_model(self):
-        # 1. 调用爷爷类 (ManipulationEnv) 的 _load_model 来安全加载机器人
         super(Lift, self)._load_model()
-
-        # 2. 调整机器人的基座位置以适应桌子
         xpos = self.robots[0].robot_model.base_xpos_offset["table"](self.table_full_size[0])
         self.robots[0].robot_model.set_base_xpos(xpos)
 
-        # 3. 显式创建桌面场景 (彻底解决 arena 找不到的报错)
         mujoco_arena = TableArena(
             table_full_size=self.table_full_size,
             table_friction=self.table_friction,
@@ -32,48 +26,33 @@ class FlipBottleRobosuiteEnv(Lift):
         )
         mujoco_arena.set_origin([0.16, 0, 0])
 
-        # 4. 初始化自带的真实水瓶模型
-        self.cube = BottleObject(name="cube")
+        self.cube = BottleObject(name="cube") 
         
-        # 5. 配置物体的初始随机采样器
+        # [CHANGE 1A]: Rotate 180 degrees around the X-axis to invert the bottle
         self.placement_initializer = UniformRandomSampler(
             name="ObjectSampler",
             mujoco_objects=[self.cube],
             x_range=[-0.1, 0.1],
             y_range=[-0.1, 0.1],
-            rotation=None,
+            rotation=[np.pi, np.pi], 
+            rotation_axis='x',       
             ensure_object_boundary_in_range=False,
             ensure_valid_placement=True,
             reference_pos=self.table_offset,
             z_offset=0.01,
         )
 
-        # 6. 将场景、机器人和水瓶打包编译进底层物理引擎
         self.model = ManipulationTask(
             mujoco_arena=mujoco_arena,
             mujoco_robots=[robot.robot_model for robot in self.robots],
             mujoco_objects=[self.cube],
         )
 
-# =================================================================
-# 2. 定义 Cap-X 框架所需的 Simulator Wrapper
-# =================================================================
 class FlipBottleSimLowLevel(RobosuiteBaseEnv):
     _SUBSAMPLE_RATE = 5
 
-    def __init__(
-        self,
-        controller_cfg: str = "capx/integrations/robosuite/controllers/config/robots/panda_joint_ctrl.json",
-        max_steps: int = 1500,
-        seed: int | None = None,
-        viser_debug: bool = False,
-        privileged: bool = False,
-        enable_render: bool = False,
-    ) -> None:
-        super().__init__(
-            controller_cfg=controller_cfg, max_steps=max_steps, seed=seed, 
-            viser_debug=False, privileged=privileged, enable_render=enable_render
-        )
+    def __init__(self, controller_cfg: str = "capx/integrations/robosuite/controllers/config/robots/panda_joint_ctrl.json", max_steps: int = 1500, seed: int | None = None, viser_debug: bool = False, privileged: bool = False, enable_render: bool = False) -> None:
+        super().__init__(controller_cfg=controller_cfg, max_steps=max_steps, seed=seed, viser_debug=False, privileged=privileged, enable_render=enable_render)
 
         self.robosuite_env = FlipBottleRobosuiteEnv(
             robots=["Panda"],
@@ -89,13 +68,14 @@ class FlipBottleSimLowLevel(RobosuiteBaseEnv):
             reward_shaping=True,
         )
 
-        # 覆盖默认的生成位置，保证水瓶在桌子中央附近
+        # [CHANGE 1B]: Apply the same inverted rotation setup to the override sampler
         self.robosuite_env.placement_initializer = UniformRandomSampler(
             name="ObjectSampler",
             mujoco_objects=[self.robosuite_env.cube],
             x_range=[-0.1, 0.1],
             y_range=[-0.1, 0.1],
-            rotation=None,
+            rotation=[np.pi, np.pi], 
+            rotation_axis='x',       
             ensure_object_boundary_in_range=False,
             ensure_valid_placement=True,
             reference_pos=self.robosuite_env.table_offset,
@@ -105,6 +85,9 @@ class FlipBottleSimLowLevel(RobosuiteBaseEnv):
 
         self._init_robot_links()
         self._init_viser_debug(viser_debug)
+        
+        self.cumulative_flip_angle = 0.0
+        self.prev_bottle_quat_wxyz = None
 
     def reset(self, *, seed=None, options=None):
         if seed is not None:
@@ -115,8 +98,9 @@ class FlipBottleSimLowLevel(RobosuiteBaseEnv):
 
         self._step_count = 0
         self._sim_step_count = 0
+        self.cumulative_flip_angle = 0.0
+        self.prev_bottle_quat_wxyz = None
 
-        # 让物理引擎运行几步，让瓶子在桌面上落稳
         for _ in range(50):
             self.robosuite_env.sim.forward()
             self.robosuite_env.sim.step()
@@ -127,27 +111,36 @@ class FlipBottleSimLowLevel(RobosuiteBaseEnv):
         self._current_joints[6] -= np.pi
 
         obs = self.get_observation()
+        
         self.gripper_link_wxyz_xyz = np.concatenate([
-            self.robosuite_env.sim.data.xquat[self.gripper_link_idx],
+            self.robosuite_env.sim.data.xquat[self.gripper_link_idx], 
             self.robosuite_env.sim.data.xpos[self.gripper_link_idx],
         ])
 
-        info = {"task_prompt": "Flip the bottle 360 degrees. 180 degrees flip gives half reward."}
+        # [CHANGE 4]: Update the prompt instructions to target 180 degrees
+        info = {"task_prompt": "Flip the inverted bottle 180 degrees upright. You will get a continuous reward proportional to the flipped angle (angle / 180)."}
         return obs, info
 
     def get_observation(self) -> dict:
         robosuite_obs = self.robosuite_env._get_observations()
+        
         base_link_wxyz_xyz = np.concatenate([
             self.robosuite_env.sim.data.xquat[self.base_link_idx],
             self.robosuite_env.sim.data.xpos[self.base_link_idx],
         ])
 
-        # 提取水瓶位姿
-        bottle_world = vtf.SE3(wxyz_xyz=np.concatenate([robosuite_obs["cube_quat"], robosuite_obs["cube_pos"]]))
+        cube_quat_xyzw = robosuite_obs["cube_quat"]
+        cube_quat_wxyz = np.array([cube_quat_xyzw[3], cube_quat_xyzw[0], cube_quat_xyzw[1], cube_quat_xyzw[2]])
+        
+        if self.prev_bottle_quat_wxyz is not None:
+            dot = np.clip(np.abs(np.dot(self.prev_bottle_quat_wxyz, cube_quat_wxyz)), 0.0, 1.0)
+            self.cumulative_flip_angle += np.degrees(2 * np.arccos(dot))
+        self.prev_bottle_quat_wxyz = cube_quat_wxyz
+
+        bottle_world = vtf.SE3(wxyz_xyz=np.concatenate([cube_quat_wxyz, robosuite_obs["cube_pos"]]))
         base_transform = vtf.SE3(wxyz_xyz=base_link_wxyz_xyz).inverse()
         bottle_robot = base_transform @ bottle_world
 
-        # 暴露给 Task 层的位姿
         robosuite_obs["object_poses"] = {
             "bottle": np.concatenate([bottle_robot.translation(), bottle_robot.rotation().wxyz]).astype(np.float32),
         }
@@ -158,43 +151,17 @@ class FlipBottleSimLowLevel(RobosuiteBaseEnv):
 
     def compute_reward(self):
         """
-        Reward computation for flip task:
-        - Full reward (1.0) for 360 degrees flip
-        - Half reward (0.5) for 180 degrees flip
-        - 0 otherwise
+        Continuous reward proportional to the rotated angle.
+        n / 180 where n is cumulative_flip_angle.
         """
-        flip_angle = self.get_bottle_flip_angle()
-        
-        if flip_angle >= 360:  # Full 360 degree flip
-            return 1.0
-        elif flip_angle >= 180:  # At least 180 degree flip
-            return 0.5
-        else:
-            return 0.0
+        flip_angle = self.cumulative_flip_angle
+        # [CHANGE 2]: Scale reward by 180.0 instead of 360.0
+        reward = np.clip(flip_angle / 180.0, 0.0, 1.0)
+        return float(reward)
 
     def task_completed(self):
-        """Task is completed when bottle flips 360 degrees or more"""
-        flip_angle = self.get_bottle_flip_angle()
-        return flip_angle >= 360
+        # [CHANGE 3]: Condition for success is now 180.0 degrees
+        return self.cumulative_flip_angle >= 180.0
 
-    def get_bottle_flip_angle(self):
-        """
-        Calculate the flip angle of the bottle by tracking rotation around horizontal axis.
-        Returns the total rotation angle in degrees.
-        """
-        obs = self.robosuite_env._get_observations()
-        
-        # Get bottle quaternion (wxyz format)
-        bottle_quat = obs["cube_quat"]  # [w, x, y, z]
-        
-        # Convert quaternion to rotation matrix to extract rotation angle
-        # We'll use the quaternion to get the rotation angle around the primary axis
-        w, x, y, z = bottle_quat
-        
-        # Calculate rotation angle from quaternion: angle = 2 * arccos(w)
-        # Clamp w to [-1, 1] to avoid numerical errors
-        w = np.clip(w, -1.0, 1.0)
-        angle_rad = 2 * np.arccos(w)
-        angle_deg = np.degrees(angle_rad)
-        
-        return angle_deg
+# Optional: Ensure you register the environment at the bottom if not done elsewhere
+# register_env("flip_bottle_sim_low_level", FlipBottleSimLowLevel)

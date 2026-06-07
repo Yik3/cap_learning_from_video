@@ -51,3 +51,6 @@ check.md
 
 video_data/
 trajectory_data/
+*.npy
+*.png
+*.PNG

@@ -1,0 +1,103 @@
+env:
+  _target_: capx.envs.tasks.franka.flip_bottle_task.FrankaFlipBottleTaskEnv
+  cfg:
+    _target_: capx.envs.tasks.base.CodeExecEnvConfig
+    low_level: flip_bottle_sim_env
+    privileged: false
+    apis:
+      - FrankaControlApi
+    prompt: |
+        {
+        You are controlling a Franka Emika robot with the API described below. You are provided with the initial observation of the workspace.
+
+        [1. SCENE DESCRIPTION: Describe the scene based strictly on the initial observation. Focus entirely on geometry, bounding boxes, spatial layout, and physics. Establish the absolute reference coordinate system (e.g., +z is up, table surface z=0.0). Only mention color if mathematically necessary for object disambiguation.]
+        The workspace consists of a flat, horizontal table surface at z=0. On the table, there is a single object: a green, hexagonal prism. The prism is tapered, with a smaller hexagonal face and a larger hexagonal face. Initially, the object is standing in an unstable equilibrium on its smaller face, with its longitudinal axis aligned with the z-axis. The larger face is pointing upwards (+z direction). The robot's end-effector is visible and is initially positioned away from the object.
+
+        [2. STATE CHANGE & GOAL REASONING: Based on the key frames, define the exact start and end states. Skip narrating the human's actions. What is the fundamental, mathematical task we are trying to achieve? Translate the visual goal into an algorithmic goal (e.g., "sweep the min/max X and Y bounds of object A" rather than "clean the board").]
+        The initial state of the green object is `State_A`, where it is balanced on its smaller base, with its center of mass elevated. The final state is `State_B`, where the object is resting stably on its larger base on the table surface (z=0). The fundamental task is to change the object's orientation by 180 degrees around an axis perpendicular to its longitudinal axis (a horizontal axis) and place it back on the table. The goal is to transition the object from `State_A` to `State_B`, minimizing displacement in the x-y plane.
+
+        [3. CONSTRAINTS:
+        - Task Constraints: The robot must grasp the main body of the hexagonal prism. The final placement requires the object's larger hexagonal face to be coplanar with the table surface (z=0). The object must not be dropped or damaged during the reorientation maneuver.
+        - Environment Constraints: All robot motions must maintain a z-coordinate greater than the table surface (z > 0) to avoid collisions, except for the final placement of the object. Trajectory waypoints should be close together to ensure smooth motion and avoid Inverse Kinematics (IK) solver failures, especially during the wrist rotation. The gripper must be fully open before initiating grasp and after releasing the object.
+        ]
+        [4. SUGGESTED METHODS: Formulate a highly prescriptive, step-by-step plan for the ROBOT. Prioritize robotic efficiency over mimicking the human hand. Be direct and imperative.
+        Key tips:
+        - Be descriptive but point out the key details. 
+        - Break large motions into granular waypoints.
+        - Always specify the exact expected contact point and direction of the tool/gripper.
+        ]
+        [ # add this as a fixed term
+        You may write python code comments for reasoning but ONLY write the executable Python code and do not write it in code fences.
+        The functions (APIs) below are already imported to the environment. If you want to use numpy, you need to import it explicitly.
+        ]
+        # Get the object's initial position and dimensions.
+        obj_pos = get_obj_pos("green_hexagonal_prism")
+        obj_bbox = get_obj_bbox("green_hexagonal_prism")
+
+        # 1. Approach the object from above.
+        # Define a pre-grasp position safely above the object's center.
+        pre_grasp_pos = [obj_pos.x, obj_pos.y, obj_pos.z + obj_bbox.z + 0.1]
+        # Use a standard downward-facing orientation.
+        downward_orientation = [0, 1, 0, 0]
+        move_rt(pre_grasp_pos, downward_orientation)
+
+        # 2. Descend to grasp the object.
+        # The grasp height should be the vertical midpoint of the object.
+        grasp_height = obj_pos.z + obj_bbox.z / 2
+        grasp_pos = [obj_pos.x, obj_pos.y, grasp_height]
+        move_rt(grasp_pos, downward_orientation)
+
+        # 3. Secure the object.
+        close_gripper()
+
+        # 4. Lift the object vertically to a safe height for rotation.
+        lift_height = grasp_height + 0.15
+        lift_pos = [obj_pos.x, obj_pos.y, lift_height]
+        move_rt(lift_pos, downward_orientation)
+
+        # 5. Reorient the object by rotating the wrist 180 degrees.
+        # This rotation flips the object upside down.
+        # A 180-degree rotation around the x-axis from the downward orientation.
+        flipped_orientation = [1, 0, 0, 0]
+        move_rt(lift_pos, flipped_orientation)
+
+        # 6. Prepare to place the object.
+        # The target position on the table is the same x, y coordinate.
+        # The gripper's target z-height will be half the object's height, so the object's new base touches the table.
+        place_height = obj_bbox.z / 2
+        place_pos = [obj_pos.x, obj_pos.y, place_height]
+        move_rt(place_pos, flipped_orientation)
+
+        # 7. Release the object.
+        open_gripper()
+
+        # 8. Retreat vertically to avoid collision.
+        retreat_pos = [obj_pos.x, obj_pos.y, lift_height]
+        move_rt(retreat_pos, flipped_orientation)
+
+        # 9. Return to a neutral position.
+        # First, reset orientation to a standard downward pose.
+        move_rt(retreat_pos, downward_orientation)
+        # Then move to a neutral cartesian position.
+        move_rt([0.5, 0.0, 0.5], downward_orientation)
+        }
+
+# 让框架自动拉起视觉和运动规划服务器 (这样你就不用手动开多余的 terminal 了)
+api_servers:
+  - _target_: capx.serving.launch_sam3_server.main
+    device: cuda
+    port: 8114
+    host: 127.0.0.1
+  - _target_: capx.serving.launch_contact_graspnet_server.main
+    port: 8115
+    host: 127.0.0.1
+  - _target_: capx.serving.launch_pyroki_server.main
+    port: 8116
+    host: 127.0.0.1
+    robot: panda_description
+    target_link: panda_hand
+
+record_video: true
+output_dir: ./outputs/flip_bottle_pipeline
+trials: 10
+num_workers: 1

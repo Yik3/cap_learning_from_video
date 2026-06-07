@@ -1,24 +1,28 @@
-You are writing a task prompt for VLM to use a Code as Policy framework to control robots to finish tasks. You need to carefully reference the key frames from a demonstration and form a task prompt for VLM. The image filename with the smaller number is an earlier state, and larger numbers represents later states. Note: the robot does not have to finish the task the same way humans does. Achieving a similar effect shown in the video is good. Your response have to be in such format:
+You are writing a task prompt for VLM to use a Code as Policy framework to control robots to finish tasks. You will be provided with two initial observations of the workspace(One global camera view one wrist view in actual execution stage) and a sequence of key frames from a demonstration. The image filename with the smaller number is an earlier state, and larger numbers represent later states.
+!!! IMPORTANT: The human video may not be the optimal robot trajectory. Reference the start and end states of the objects to determine the true goal. What is the fundamental task we are trying to achieve?
+The robot does not have to finish the task the same way humans do. Strip away human-centric narrative and instead provide strict, mathematical, and highly prescriptive algorithmic instructions.
+
+Your response must be in exactly this format:
+
 {
-You are controlling a Franka Emika robot with API described below.
+You are controlling a Franka Emika robot with the API described below. You are provided with the initial observation of the workspace.
 
-[1. SCENE DESCRIPTION: Describe the scene focusing on geometry, spatial layout, and physics. Only mention color if necessary for object disambiguation. Establish the reference coordinate system (e.g., +z is up, where the table surface lies). ]
+[1. SCENE DESCRIPTION: Describe the scene based strictly on the initial observation. Focus entirely on geometry, bounding boxes, spatial layout, and physics. Establish the absolute reference coordinate system (e.g., +z is up, table surface z=0.0). Only mention color if mathematically necessary for object disambiguation.]
 
-[ 2. STATE CHANGE & GOAL REASONING: Given the sequenced key frames (smaller number = earlier state), identify what remains unchanged (e.g., table height) and what changes. 
-!!! IMPORTANT: The human video may not be the optimal robot trajectory. Reference the start and end states of the objects to determine the true goal. What is the fundamental task we are trying to achieve?]
+[2. STATE CHANGE & GOAL REASONING: Based on the key frames, define the exact start and end states. Skip narrating the human's actions. What is the fundamental, mathematical task we are trying to achieve? Translate the visual goal into an algorithmic goal (e.g., "sweep the min/max X and Y bounds of object A" rather than "clean the board").]
 
-[ 3. CONSTRAINT & GRASP REASONING: 
-# - Relational Constraints: Are there object relations we must obey? (e.g., object A must remain upright, object B must be inserted into C). Do not invent relations; stick to physics and observation.
-# - Safety & Collision: How do we avoid colliding with the table or other objects? 
-# - Grasping/Approching: What is the optimal approach vector for the gripper? Along which axis should the object be grasped/approched?]
+[3. CONSTRAINTS:
+- Task Constraints: Explicitly define what must mathematically happen for success. Specify required tool/gripper orientations (e.g., downward-facing quat wxyz), precise contact heights (using object extents), and required bounds of motion. Do not invent relations; stick to physics and spatial boundaries.
+- Environment Constraints: Define strict safety limits. How do we avoid table collisions? Explicitly warn against large deltas between waypoints to prevent Inverse Kinematics (IK) solver failures and ensure optimal trajectories.]
 
-[4. SUGGESTED METHODS: Formulate a step-by-step plan for the ROBOT. Prioritize robotic efficiency and kinematics over mimicking the human hand. 
-# Key tips: 
-# - The extent from `get_object_pose(..., return_bbox_extent=True)` is the FULL side length. Use `extent[2]/2` for half-height.
-# - Break large motions into waypoints to prevent Inverse Kinematics (IK) solver failures.
-# always think about where should be the robot contact point and direction of contact
+[4. SUGGESTED METHODS: Formulate a highly prescriptive, step-by-step plan for the ROBOT. Prioritize robotic efficiency over mimicking the human hand. Be direct and imperative.
+Key tips:
+- Be descriptive but point out the key details. 
+- Break large motions into granular waypoints.
+- Always specify the exact expected contact point and direction of the tool/gripper.
 ]
-
+[ # add this as a fixed term
 You may write python code comments for reasoning but ONLY write the executable Python code and do not write it in code fences.
 The functions (APIs) below are already imported to the environment. If you want to use numpy, you need to import it explicitly.
+]
 }

@@ -21,16 +21,6 @@ env:
           - **Final State:** The robot's end-effector has completed a full sweep of the rectangular area defined by the bounding box of the brown region.
           - **Algorithmic Goal:** The objective is to perform a raster scan (or boustrophedon) motion with the robot's end-effector across the entire bounding box of the brown object, `[x_min, x_max]` and `[y_min, y_max]`, while maintaining a constant, small offset in the +z direction relative to the table surface.
 
-          [3. CONSTRAINTS:
-          - Task Constraints:
-            - The end-effector must maintain a constant, downward-facing orientation throughout the sweeping motion. The target orientation quaternion (wxyz) is `[0, 1, 0, 0]`.
-            - The height of the end-effector during the sweeping motion must be held at a constant `z = 0.000` to simulate surface contact without causing a collision.
-            - The sweeping motion must cover the entire rectangular area defined by the brown object's bounding box.
-          - Environment Constraints:
-            - The end-effector must not move below z=0 at any point to avoid collision with the table.
-            - Waypoints for the trajectory should be granular and closely spaced (e.g., < 5cm deltas) to ensure smooth motion and prevent inverse kinematics solver failures.
-            - Approach and retreat motions must be performed vertically from/to a safe height (e.g., z=0.2) to avoid collisions.
-
           [4. SUGGESTED METHODS: Formulate a highly prescriptive, step-by-step plan for the ROBOT. Prioritize robotic efficiency over mimicking the human hand. Be direct and imperative.
           Key tips:
           - Be descriptive but point out the key details. 
@@ -107,7 +97,7 @@ api_servers:
     target_link: panda_hand
     
 record_video: true
-output_dir: ./outputs/spill_wipe_pipeline
+output_dir: ./outputs/spill_wipe_ablation
 
 trials: 10
 num_workers: 12
